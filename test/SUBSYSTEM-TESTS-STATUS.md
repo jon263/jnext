@@ -70,6 +70,7 @@ VHDL-derived compliance test suite for the JNEXT ZX Spectrum Next emulator. All 
 | Resume Guard          |       11 |       11 |      0 |       0 |    100% | 🟢 All tests pass. |
 | Compiler Symbols      |       25 |       25 |      0 |       0 |    100% | 🟢 All tests pass. |
 | Source Maps           |       31 |       31 |      0 |       0 |    100% | 🟢 All tests pass. |
+| Page-aware Debug Core |       35 |       35 |      0 |       0 |    100% | 🟢 All tests pass. |
 | GUI Preferences (AppConfig) |       45 |       45 |      0 |       0 |    100% | 🟢 All tests pass. |
 | Present count (widget) |       17 |       17 |      0 |       0 |    100% | 🟢 All tests pass. |
 | Esc/BREAK + fullscreen routing |        6 |        6 |      0 |       0 |    100% | 🟢 All tests pass. |
@@ -78,6 +79,7 @@ VHDL-derived compliance test suite for the JNEXT ZX Spectrum Next emulator. All 
 | Debugger Audio Panel  |       15 |       15 |      0 |       0 |    100% | 🟢 All tests pass. |
 | Debugger Quit Gate    |        5 |        5 |      0 |       0 |    100% | 🟢 All tests pass. |
 | Source Debugging      |       33 |       33 |      0 |       0 |    100% | 🟢 All tests pass. |
-| **Total**             | **5584** | **5581** |  **0** |   **3** | **99%** | 🟡 3 test(s) skipped. |
+| Page-pinned Watches   |       25 |       25 |      0 |       0 |    100% | 🟢 All tests pass. |
+| **Total**             | **5644** | **5641** |  **0** |   **3** | **99%** | 🟡 3 test(s) skipped. |
 
 **SKIP:** Functionality that has been traced from VHDL to a test case, but still has not been developed/fixed in C++ code.

@@ -654,9 +654,10 @@ Off by default; enable with \f[B]\-\-trace\f[R], the debugger\(cqs
 Enable Trace menu item, or implicitly by enabling rewind, which needs it
 for Step Back
 .IP \(bu 2
-\f[B]Symbol table\f[R] \- Z88DK MAP files and Boriel/NextBuild
-\f[CR]Memory.txt\f[R] files.
-Use \f[B]Map > Load Symbols\f[R] to load one manually.
+\f[B]Symbol table\f[R] \- Z88DK MAP files, Boriel/NextBuild
+\f[CR]Memory.txt\f[R] files and page\-qualified labels from sjasmplus
+SLD \f[CR]L\f[R] records.
+Use \f[B]Map > Load Symbols\f[R] to load a MAP or Memory file manually.
 A NEX automatically checks for a same\-stem \f[CR]game.Memory.txt\f[R],
 then \f[CR]Memory.txt\f[R], beside the program
 .IP \(bu 2
@@ -665,10 +666,14 @@ Use \f[B]Map > Load SLD Source Map\f[R] manually, or place
 \f[CR]game.sld\f[R] or \f[CR]game.sld.txt\f[R] beside a NEX for
 automatic loading.
 Program identity metadata rejects a stale automatic sidecar.
-Page\-qualified source locations distinguish the same logical address in
-different physical 8K pages; numeric and symbol breakpoints remain
-logical wildcards, while source\-gutter breakpoints retain the physical
-page
+Page\-qualified source locations and labels distinguish the same logical
+address in different physical 8K pages.
+An \f[CR]address\(atpage\f[R] expression or page\-qualified symbol
+retains the physical page in an execution breakpoint or watch.
+A page suffix can also pin an unqualified symbol to that page;
+unqualified addresses remain logical wildcards.
+Watches created from the disassembly context menu pin the currently
+mapped RAM page
 .IP \(bu 2
 \f[B]Backwards execution (rewind)\f[R] \- frame\-snapshot ring buffer,
 with Step Back, Frame Back and a rewind slider.

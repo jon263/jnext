@@ -818,7 +818,9 @@ void DebuggerManager::on_load_sld() {
     if (path.isEmpty()) return;
 
     SourceMap candidate;
-    const auto result = load_sld(candidate, path.toStdString());
+    SymbolTable candidate_symbols;
+    const auto result = load_sld(candidate, path.toStdString(),
+                                 &candidate_symbols);
     if (result) {
         const auto identity = candidate.verify_program(
             [this](uint16_t address) { return emulator_->mmu().read(address); });
@@ -834,8 +836,12 @@ void DebuggerManager::on_load_sld() {
             if (answer != QMessageBox::Yes) return;
         }
         source_map_ = std::move(candidate);
+        symbol_table_.replace_page_qualified(candidate_symbols);
         QMessageBox::information(main_window_, QObject::tr("Source Map Loaded"),
-            QObject::tr("Loaded %1 source traces from:\n%2").arg(result.count).arg(path));
+            QObject::tr("Loaded %1 source traces and %2 SLD labels from:\n%3")
+                .arg(result.count)
+                .arg(result.symbol_count)
+                .arg(path));
         refresh_panels();
     } else {
         QMessageBox::warning(main_window_, QObject::tr("Load Failed"),
@@ -854,19 +860,27 @@ void DebuggerManager::load_debug_sidecars_for_program(const std::string& program
     } else {
         symbol_table_.clear();
     }
-    const auto source_result = load_sld_sidecar(source_map_, program_path);
+    SourceMap source_candidate;
+    SymbolTable symbol_candidate;
+    const auto source_result = load_sld_sidecar(
+        source_candidate, program_path, &symbol_candidate);
     if (source_result) {
-        const auto identity = source_map_.verify_program(
+        const auto identity = source_candidate.verify_program(
             [this](uint16_t address) { return emulator_->mmu().read(address); });
         if (identity && !*identity) {
             Log::platform()->error(
                 "Rejected SLD source map '{}': loaded program hash differs",
-                source_map_.loaded_file());
+                source_candidate.loaded_file());
             source_map_.clear();
         } else {
-            Log::platform()->info("Loaded {} SLD source traces from '{}'{}",
-                                  source_result.count, source_map_.loaded_file(),
-                                  identity ? " (program identity verified)" : "");
+            source_map_ = std::move(source_candidate);
+            symbol_table_.replace_page_qualified(symbol_candidate);
+            Log::platform()->info(
+                "Loaded {} SLD source traces from '{}'{}; imported {} SLD labels",
+                source_result.count,
+                source_map_.loaded_file(),
+                identity ? " (program identity verified)" : "",
+                source_result.symbol_count);
             refresh_panels();
         }
     } else {

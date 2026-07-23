@@ -16,11 +16,14 @@ automatic mismatch is rejected. A manual mismatch asks whether to continue,
 because a running program may legitimately have changed writable bytes inside
 its original binary range.
 
-Source lookup, source stepping, source-gutter breakpoints and tracked call
-frames keep the physical 8K page when the SLD supplies one. This prevents a
-bank switch from confusing two routines that share a logical address. Plain
-numeric or symbol execution breakpoints remain logical wildcards; data
-watchpoints and watches also follow the CPU's current logical mapping.
+Source lookup, source stepping, source-gutter breakpoints, SLD labels and
+tracked call frames keep the physical 8K page when the SLD supplies one. This
+prevents a bank switch from confusing two routines that share a logical
+address. An SLD page value of `-1` remains an unqualified logical fallback.
+Page-qualified symbols, `$C000@2A`, or an unqualified symbol with a suffix such
+as `UpdatePlayer@2A` create page-qualified execution breakpoints. Data
+watchpoints still follow the CPU's current logical mapping; ordinary watches
+can either follow that mapping or be pinned to an inactive physical page.
 
 The source step family is documented under
 [Run, pause, and the step family](01-run-pause-and-the-step-family.md).

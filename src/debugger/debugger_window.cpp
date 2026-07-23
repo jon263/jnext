@@ -998,11 +998,19 @@ void DebuggerWindow::show_add_data_bp_dialog(WatchType type) {
 
     if (dlg.exec() != QDialog::Accepted) return;
 
-    const auto addr = debugger_mgr_->symbol_table().resolve(
+    const auto addr = debugger_mgr_->symbol_table().resolve_address(
         addr_edit->text().trimmed().toStdString());
     if (!addr) return;
+    if (addr->page) {
+        QMessageBox::information(
+            this, tr("Page-qualified Data Breakpoint"),
+            tr("Data breakpoints observe the live CPU address bus and cannot "
+               "be pinned to an inactive RAM page. Use an unqualified address "
+               "or add a page-pinned watch instead."));
+        return;
+    }
 
-    emulator_->debug_state().breakpoints().add_watchpoint(*addr, type);
+    emulator_->debug_state().breakpoints().add_watchpoint(addr->address, type);
 }
 
 void DebuggerWindow::refresh_panels() {

@@ -4,10 +4,12 @@
 #include <QTableWidget>
 #include <vector>
 #include <cstdint>
+#include <optional>
 #include <string>
 
 class Emulator;
 class SymbolTable;
+struct SymbolAddress;
 
 /// Watch panel showing memory values at watched addresses.
 class WatchPanel : public QWidget {
@@ -19,7 +21,8 @@ public:
     void refresh();
 
     /// Add a watch entry.
-    void add_watch(uint16_t addr, const std::string& label, int type = 0);
+    void add_watch(uint16_t addr, const std::string& label, int type = 0,
+                   std::optional<uint8_t> page = std::nullopt);
 
     /// Set symbol table for resolving names entered in the address field.
     void set_symbol_table(SymbolTable* st) { symbol_table_ = st; }
@@ -39,7 +42,7 @@ public slots:
 
 private:
     void update_table();
-    bool show_watch_dialog(const QString& title, uint16_t& addr,
+    bool show_watch_dialog(const QString& title, SymbolAddress& location,
                            std::string& label, int& type);
 
     Emulator* emulator_;
@@ -50,6 +53,7 @@ private:
 
     struct WatchEntry {
         uint16_t addr;
+        std::optional<uint8_t> page;
         std::string label;
         WatchType type;
     };

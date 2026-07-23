@@ -626,6 +626,13 @@ target_link_libraries(source_map_test PRIVATE jnext_debug)
 target_include_directories(source_map_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_test(NAME source_map_tests COMMAND source_map_test)
 
+# Page-qualified SLD symbols and non-mutating physical-page inspection.
+add_executable(page_aware_debug_test debug/page_aware_debug_test.cpp)
+target_link_libraries(page_aware_debug_test PRIVATE
+    jnext_debug jnext_memory jnext_peripheral)
+target_include_directories(page_aware_debug_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+add_test(NAME page_aware_debug_tests COMMAND page_aware_debug_test)
+
 # Task 66 — AppConfig (GUI preferences: QSettings-backed load/save,
 # CLI-vs-saved-preference precedence). Needs jnext_gui (QSettings/QString
 # usage in src/gui/app_config.*), so it is gated on ENABLE_QT_UI like the
@@ -740,6 +747,17 @@ if(ENABLE_DEBUGGER)
         jnext_save jnext_debug spdlog::spdlog zot_tzx ZLIB::ZLIB)
     target_include_directories(debugger_source_step_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
     add_test(NAME debugger_source_step_tests COMMAND debugger_source_step_test)
+
+    # Page-pinned WatchPanel values against inactive physical RAM pages.
+    add_executable(debugger_page_watch_test debugger/page_watch_test.cpp)
+    set_target_properties(debugger_page_watch_test PROPERTIES AUTOMOC ON)
+    target_link_libraries(debugger_page_watch_test PRIVATE
+        jnext_debugger
+        jnext_core jnext_cpu jnext_memory jnext_video
+        jnext_audio jnext_port jnext_peripheral jnext_input
+        jnext_save jnext_debug spdlog::spdlog zot_tzx ZLIB::ZLIB)
+    target_include_directories(debugger_page_watch_test PRIVATE ${CMAKE_SOURCE_DIR}/src)
+    add_test(NAME debugger_page_watch_tests COMMAND debugger_page_watch_test)
 endif()
 
 # LoRes pixel-generator compliance tests (GH #63).

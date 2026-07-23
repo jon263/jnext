@@ -14,6 +14,7 @@
 #include <QFormLayout>
 #include <QLineEdit>
 #include <QComboBox>
+#include <QMessageBox>
 
 BreakpointPanel::BreakpointPanel(Emulator* emulator, QWidget* parent)
     : QWidget(parent)
@@ -131,7 +132,10 @@ void BreakpointPanel::refresh()
 
         QString sym;
         if (symbol_table_) {
-            auto s = symbol_table_->lookup(e.addr);
+            const uint8_t page = e.page >= 0
+                ? static_cast<uint8_t>(e.page)
+                : emulator_->mmu().get_effective_page(e.addr >> 13);
+            auto s = symbol_table_->lookup(page, e.addr);
             if (s) sym = QString::fromStdString(*s);
         }
         if (sym.isEmpty() && source_map_) {
@@ -190,12 +194,26 @@ bool BreakpointPanel::show_bp_dialog(const QString& title, uint16_t& addr,
 
     const std::string expression = addr_edit->text().trimmed().toStdString();
     type_index = type_combo->currentIndex();
-    const auto symbol = symbol_table_ ? symbol_table_->resolve(expression) : std::nullopt;
+    const auto symbol = symbol_table_
+        ? symbol_table_->resolve_address(expression) : std::nullopt;
     const auto source = type_index == 0 && !symbol && source_map_
         ? source_map_->resolve(expression) : std::nullopt;
     if (!symbol && !source) return false;
-    addr = symbol ? *symbol : source->address;
-    page = source && source->page ? static_cast<int>(*source->page) : -1;
+    if (symbol) {
+        if (type_index != 0 && symbol->page) {
+            QMessageBox::information(
+                this, tr("Page-qualified Data Breakpoint"),
+                tr("Data breakpoints observe the live CPU address bus and "
+                   "cannot be pinned to an inactive RAM page. Use an "
+                   "unqualified address or add a page-pinned watch instead."));
+            return false;
+        }
+        addr = symbol->address;
+        page = symbol->page ? static_cast<int>(*symbol->page) : -1;
+    } else {
+        addr = source->address;
+        page = source->page ? static_cast<int>(*source->page) : -1;
+    }
 
     return true;
 }

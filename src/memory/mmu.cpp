@@ -18,6 +18,43 @@ Mmu::Mmu(Ram& ram, Rom& rom) : ram_(ram), rom_(rom) {
     reset(true);
 }
 
+std::optional<uint8_t> Mmu::debug_read_page(uint8_t page,
+                                            uint16_t offset) const
+{
+    if (page >= 0xE0 || offset >= 0x2000) return std::nullopt;
+
+    if (rom_in_sram_) {
+        if (page == 0x0A || page == 0x0B) {
+            const size_t bank5_offset =
+                static_cast<size_t>(page - 0x0A) * 0x2000 + offset;
+            return bank5_vram_[bank5_offset];
+        }
+        if (page == 0x0E) return bank7_bram_[offset];
+    }
+
+    const uint8_t* storage = ram_.page_ptr(to_sram_page(page));
+    if (!storage) return std::nullopt;
+    return storage[offset];
+}
+
+std::optional<uint32_t> Mmu::debug_read_page_value(uint8_t page,
+                                                   uint16_t offset,
+                                                   size_t width) const
+{
+    if ((width != 1 && width != 2 && width != 4)
+        || static_cast<size_t>(offset) + width > 0x2000) {
+        return std::nullopt;
+    }
+    uint32_t value = 0;
+    for (size_t byte_index = 0; byte_index < width; ++byte_index) {
+        const auto byte = debug_read_page(
+            page, static_cast<uint16_t>(offset + byte_index));
+        if (!byte) return std::nullopt;
+        value |= static_cast<uint32_t>(*byte) << (byte_index * 8);
+    }
+    return value;
+}
+
 void Mmu::set_boot_rom(const uint8_t* data, size_t size) {
     // VHDL zxnext.vhd:3199-3204 hardwires the bootrom entity to
     // cpu_a(12:0) (13 bits = exactly 8 KB). Wrong-sized blobs are not

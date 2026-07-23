@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <optional>
 #include <vector>
 #include "ram.h"
 #include "rom.h"
@@ -61,6 +62,17 @@ public:
         if (slot < 0 || slot > 7) return 0xFF;
         return nr_mmu_[slot] != 0xFF ? nr_mmu_[slot] : slots_[slot];
     }
+
+    /// Read an offset from a logical 8K RAM page without changing the live
+    /// MMU mapping. Intended for debugger inspection of inactive banks.
+    /// Pages 0xE0-0xFF are the Next ROM area and are intentionally rejected.
+    std::optional<uint8_t> debug_read_page(uint8_t page,
+                                           uint16_t offset) const;
+    /// Assemble a little-endian debugger value wholly within one 8K page.
+    /// Width must be 1, 2 or 4 bytes; cross-page values are rejected.
+    std::optional<uint32_t> debug_read_page_value(uint8_t page,
+                                                  uint16_t offset,
+                                                  size_t width) const;
     bool is_slot_rom(int slot) const { return read_only_[slot]; }
 
     // ── G46(b) — VHDL `sram_pre_override` priority arbiter ─────────────

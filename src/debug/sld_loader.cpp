@@ -1,6 +1,7 @@
 #include "debug/sld_loader.h"
 
 #include "debug/source_map.h"
+#include "debug/symbol_table.h"
 
 #include <algorithm>
 #include <charconv>
@@ -139,9 +140,37 @@ bool read_line(std::istream& input, std::string& line)
     return true;
 }
 
+std::optional<std::pair<std::string, std::vector<std::string>>>
+sld_label_names(std::string_view data)
+{
+    const auto fields = split(data, ',');
+    if (fields.size() < 3 || fields[1].empty()) return std::nullopt;
+
+    std::string emitted = ".";
+    if (!fields[0].empty()) {
+        emitted += std::string(fields[0]);
+        emitted += '.';
+    }
+    emitted += std::string(fields[1]);
+    if (!fields[2].empty()) {
+        emitted += '.';
+        emitted += std::string(fields[2]);
+    }
+
+    std::string display = emitted.substr(1);
+    if (display.size() > 1 && display[0] == '_' && display[1] != '_')
+        display.erase(display.begin());
+
+    std::vector<std::string> aliases{emitted, emitted.substr(1)};
+    aliases.erase(
+        std::remove(aliases.begin(), aliases.end(), display), aliases.end());
+    return std::pair{std::move(display), std::move(aliases)};
+}
+
 } // namespace
 
-SourceMapLoadResult load_sld(SourceMap& map, const std::string& path)
+SourceMapLoadResult load_sld(SourceMap& map, const std::string& path,
+                             SymbolTable* symbols)
 {
     std::ifstream input(path);
     if (!input.is_open()) return failed("could not open SLD file");
@@ -155,7 +184,9 @@ SourceMapLoadResult load_sld(SourceMap& map, const std::string& path)
     std::optional<uint32_t> program_org;
     std::optional<uint32_t> program_size;
     std::vector<SourceLocation> locations;
+    std::vector<SymbolDefinition> definitions;
     int trace_count = 0;
+    int symbol_count = 0;
     int device_count = 0;
     int page_count = 0;
     int line_number = 1;
@@ -198,6 +229,32 @@ SourceMapLoadResult load_sld(SourceMap& map, const std::string& path)
             if (++device_count != 1) return failed("SLD contains multiple device records");
             continue;
         }
+        if (fields[6] == "L") {
+            if (device_count != 1)
+                return failed("SLD label appears before device metadata");
+            const auto page = decimal<int>(fields[4]);
+            const auto address = decimal<int>(fields[5]);
+            if (!page || *page < -1 || *page >= page_count || *page > 0xFF
+                || !address || *address < 0 || *address > 0xFFFF) {
+                return failed("invalid SLD label at line "
+                              + std::to_string(line_number));
+            }
+
+            auto names = sld_label_names(fields[7]);
+            if (!names)
+                return failed("SLD label has invalid module/main/local data at line "
+                              + std::to_string(line_number));
+            definitions.push_back({
+                static_cast<uint16_t>(*address),
+                std::move(names->first),
+                std::move(names->second),
+                *page == -1
+                    ? std::nullopt
+                    : std::optional<uint8_t>(static_cast<uint8_t>(*page)),
+            });
+            ++symbol_count;
+            continue;
+        }
         if (fields[6] != "T") continue;
         if (device_count != 1)
             return failed("SLD trace appears before device metadata");
@@ -209,12 +266,15 @@ SourceMapLoadResult load_sld(SourceMap& map, const std::string& path)
         const auto page = decimal<int>(fields[4]);
         const auto address = decimal<int>(fields[5]);
         if (!parse_position(fields[1], source_line, source_column)
-            || !page || *page < 0 || *page >= page_count || *page > 0xFF
+            || !page || *page < -1 || *page >= page_count || *page > 0xFF
             || !address || *address < 0 || *address > 0xFFFF) {
             return failed("invalid SLD trace at line " + std::to_string(line_number));
         }
         locations.push_back({std::string(fields[0]), source_line, source_column,
-                             static_cast<uint8_t>(*page),
+                             *page == -1
+                                 ? std::nullopt
+                                 : std::optional<uint8_t>(
+                                       static_cast<uint8_t>(*page)),
                              static_cast<uint16_t>(*address)});
         ++trace_count;
     }
@@ -239,18 +299,22 @@ SourceMapLoadResult load_sld(SourceMap& map, const std::string& path)
     }
 
     map.replace(std::move(locations), std::move(identity), path);
-    return {trace_count, {}};
+    if (symbols)
+        symbols->merge(std::move(definitions), path);
+    return {trace_count, {}, symbol_count};
 }
 
 SourceMapLoadResult load_sld_sidecar(SourceMap& map,
-                                     const std::string& program_path)
+                                     const std::string& program_path,
+                                     SymbolTable* symbols)
 {
     namespace fs = std::filesystem;
     const fs::path program(program_path);
     const fs::path stem = program.parent_path() / program.stem();
     for (const auto& suffix : {std::string(".sld"), std::string(".sld.txt")}) {
         const fs::path candidate(stem.string() + suffix);
-        if (fs::is_regular_file(candidate)) return load_sld(map, candidate.string());
+        if (fs::is_regular_file(candidate))
+            return load_sld(map, candidate.string(), symbols);
     }
     return failed("no adjacent SLD sidecar");
 }

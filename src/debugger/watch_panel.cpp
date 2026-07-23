@@ -12,6 +12,7 @@
 #include <QFormLayout>
 #include <QComboBox>
 #include <QLineEdit>
+#include <QMessageBox>
 #include <QString>
 
 WatchPanel::WatchPanel(Emulator* emulator, QWidget* parent)
@@ -63,32 +64,31 @@ void WatchPanel::refresh() {
 
     for (int i = 0; i < static_cast<int>(watches_.size()); ++i) {
         const auto& w = watches_[i];
-        QString value_str;
-
-        switch (w.type) {
-            case BYTE: {
-                uint8_t val = emulator_->mmu().read(w.addr);
-                value_str = QString::asprintf("$%02X", val);
-                break;
+        const int width = w.type == BYTE ? 1 : (w.type == WORD ? 2 : 4);
+        const uint16_t page_offset = w.addr & 0x1FFF;
+        std::optional<uint32_t> value;
+        if (w.page) {
+            value = emulator_->mmu().debug_read_page_value(
+                *w.page, page_offset, static_cast<size_t>(width));
+        } else {
+            uint32_t live_value = 0;
+            for (int b = 0; b < width; ++b) {
+                const uint8_t byte = emulator_->mmu().read(
+                    static_cast<uint16_t>(w.addr + b));
+                live_value |= static_cast<uint32_t>(byte) << (b * 8);
             }
-            case WORD: {
-                uint8_t lo = emulator_->mmu().read(w.addr);
-                uint8_t hi = emulator_->mmu().read(static_cast<uint16_t>(w.addr + 1));
-                uint16_t val = static_cast<uint16_t>(lo | (hi << 8));
-                value_str = QString::asprintf("$%04X", val);
-                break;
-            }
-            case LONG: {
-                uint32_t val = 0;
-                for (int b = 0; b < 4; ++b) {
-                    uint8_t byte = emulator_->mmu().read(static_cast<uint16_t>(w.addr + b));
-                    val |= static_cast<uint32_t>(byte) << (b * 8);
-                }
-                value_str = QString::asprintf("$%08X", val);
-                break;
-            }
+            value = live_value;
         }
 
+        QString value_str = "--";
+        if (value) {
+            if (w.type == BYTE)
+                value_str = QString::asprintf("$%02X", *value);
+            else if (w.type == WORD)
+                value_str = QString::asprintf("$%04X", *value);
+            else
+                value_str = QString::asprintf("$%08X", *value);
+        }
         if (i < table_->rowCount()) {
             auto* item = table_->item(i, 3);
             if (item) item->setText(value_str);
@@ -96,9 +96,11 @@ void WatchPanel::refresh() {
     }
 }
 
-void WatchPanel::add_watch(uint16_t addr, const std::string& label, int type) {
+void WatchPanel::add_watch(uint16_t addr, const std::string& label, int type,
+                           std::optional<uint8_t> page) {
     WatchEntry entry;
     entry.addr = addr;
+    entry.page = page;
     entry.label = label;
     entry.type = static_cast<WatchType>(type);
     watches_.push_back(entry);
@@ -112,7 +114,8 @@ void WatchPanel::remove_selected() {
     update_table();
 }
 
-bool WatchPanel::show_watch_dialog(const QString& title, uint16_t& addr,
+bool WatchPanel::show_watch_dialog(const QString& title,
+                                    SymbolAddress& location,
                                     std::string& label, int& type)
 {
     QDialog dlg(this);
@@ -122,8 +125,11 @@ bool WatchPanel::show_watch_dialog(const QString& title, uint16_t& addr,
     auto* form = new QFormLayout(&dlg);
 
     auto* addr_edit = new QLineEdit(&dlg);
-    addr_edit->setPlaceholderText("e.g. 4000, $4000, or symbol_name");
-    addr_edit->setText(QString::asprintf("%04X", addr));
+    addr_edit->setPlaceholderText(
+        "e.g. 4000, $C000@2A, or page_qualified_symbol");
+    addr_edit->setText(location.page
+        ? QString::asprintf("%04X@%02X", location.address, *location.page)
+        : QString::asprintf("%04X", location.address));
     form->addRow(tr("Address or symbol:"), addr_edit);
 
     auto* label_edit = new QLineEdit(&dlg);
@@ -147,23 +153,33 @@ bool WatchPanel::show_watch_dialog(const QString& title, uint16_t& addr,
 
     if (!symbol_table_) return false;
     const QString entered = addr_edit->text().trimmed();
-    const auto resolved = symbol_table_->resolve(entered.toStdString());
-    if (!resolved) return false;
-    addr = *resolved;
+    const auto resolved = symbol_table_->resolve_address(entered.toStdString());
+    if (!resolved) {
+        QMessageBox::warning(
+            this, tr("Invalid Watch Address"),
+            tr("'%1' is not a unique symbol or hexadecimal address.")
+                .arg(entered));
+        return false;
+    }
+    location = *resolved;
 
     label = label_edit->text().trimmed().toStdString();
-    if (label.empty() && symbol_table_->lookup_name(entered.toStdString()))
-        label = entered.toStdString();
+    if (label.empty()) {
+        const auto symbol = location.page
+            ? symbol_table_->lookup(*location.page, location.address)
+            : symbol_table_->lookup(location.address);
+        if (symbol) label = *symbol;
+    }
     type = type_combo->currentIndex();
     return true;
 }
 
 void WatchPanel::on_add_watch() {
-    uint16_t addr = 0;
+    SymbolAddress location;
     std::string label;
     int type = 0;
-    if (show_watch_dialog(tr("Add Watch"), addr, label, type))
-        add_watch(addr, label, type);
+    if (show_watch_dialog(tr("Add Watch"), location, label, type))
+        add_watch(location.address, label, type, location.page);
 }
 
 void WatchPanel::on_edit_watch() {
@@ -171,12 +187,13 @@ void WatchPanel::on_edit_watch() {
     if (row < 0 || row >= static_cast<int>(watches_.size())) return;
 
     auto& w = watches_[row];
-    uint16_t addr = w.addr;
+    SymbolAddress location{w.page, w.addr};
     std::string label = w.label;
     int type = static_cast<int>(w.type);
 
-    if (show_watch_dialog(tr("Edit Watch"), addr, label, type)) {
-        w.addr = addr;
+    if (show_watch_dialog(tr("Edit Watch"), location, label, type)) {
+        w.addr = location.address;
+        w.page = location.page;
         w.label = label;
         w.type = static_cast<WatchType>(type);
         update_table();
@@ -191,7 +208,10 @@ void WatchPanel::update_table() {
     for (int i = 0; i < static_cast<int>(watches_.size()); ++i) {
         const auto& w = watches_[i];
 
-        auto* addr_item = new QTableWidgetItem(QString::asprintf("$%04X", w.addr));
+        const QString address = w.page
+            ? QString::asprintf("$%04X @%02X", w.addr, *w.page)
+            : QString::asprintf("$%04X", w.addr);
+        auto* addr_item = new QTableWidgetItem(address);
         table_->setItem(i, 0, addr_item);
 
         auto* label_item = new QTableWidgetItem(QString::fromStdString(w.label));

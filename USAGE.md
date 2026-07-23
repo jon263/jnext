@@ -568,17 +568,21 @@ or `make gui-debug`); the SDL-only build has no way to open it.
   file. Off by default; enable with **--trace**, the debugger’s Enable
   Trace menu item, or implicitly by enabling rewind, which needs it for
   Step Back
-- **Symbol table** - Z88DK MAP files and Boriel/NextBuild `Memory.txt`
-  files. Use **Map \> Load Symbols** to load one manually. A NEX
+- **Symbol table** - Z88DK MAP files, Boriel/NextBuild `Memory.txt`
+  files and page-qualified labels from sjasmplus SLD `L` records. Use
+  **Map \> Load Symbols** to load a MAP or Memory file manually. A NEX
   automatically checks for a same-stem `game.Memory.txt`, then
   `Memory.txt`, beside the program
 - **Source map** - sjasmplus SLD v1 files. Use **Map \> Load SLD Source
   Map** manually, or place `game.sld` or `game.sld.txt` beside a NEX for
   automatic loading. Program identity metadata rejects a stale automatic
-  sidecar. Page-qualified source locations distinguish the same logical
-  address in different physical 8K pages; numeric and symbol breakpoints
-  remain logical wildcards, while source-gutter breakpoints retain the
-  physical page
+  sidecar. Page-qualified source locations and labels distinguish the
+  same logical address in different physical 8K pages. An `address@page`
+  expression or page-qualified symbol retains the physical page in an
+  execution breakpoint or watch. A page suffix can also pin an
+  unqualified symbol to that page; unqualified addresses remain logical
+  wildcards. Watches created from the disassembly context menu pin the
+  currently mapped RAM page
 - **Backwards execution (rewind)** - frame-snapshot ring buffer, with
   Step Back, Frame Back and a rewind slider. Opt-in, because rewind
   takes a full-machine snapshot every frame: start jnext with

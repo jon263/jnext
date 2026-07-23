@@ -2894,11 +2894,14 @@ memory so it does not silently attach a sidecar from another build. An
 automatic mismatch is rejected. A manual mismatch asks whether to continue,
 because a running program may legitimately have changed writable bytes inside
 its original binary range.</p>
-<p>Source lookup, source stepping, source-gutter breakpoints and tracked call
-frames keep the physical 8K page when the SLD supplies one. This prevents a
-bank switch from confusing two routines that share a logical address. Plain
-numeric or symbol execution breakpoints remain logical wildcards; data
-watchpoints and watches also follow the CPU's current logical mapping.</p>
+<p>Source lookup, source stepping, source-gutter breakpoints, SLD labels and
+tracked call frames keep the physical 8K page when the SLD supplies one. This
+prevents a bank switch from confusing two routines that share a logical
+address. An SLD page value of <code>-1</code> remains an unqualified logical fallback.
+Page-qualified symbols, <code>$C000@2A</code>, or an unqualified symbol with a suffix such
+as <code>UpdatePlayer@2A</code> create page-qualified execution breakpoints. Data
+watchpoints still follow the CPU's current logical mapping; ordinary watches
+can either follow that mapping or be pinned to an inactive physical page.</p>
 <p>The source step family is documented under
 <a href="01-run-pause-and-the-step-family.html">Run, pause, and the step family</a>.</p>
 

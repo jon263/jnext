@@ -83,7 +83,7 @@ void CallStackPanel::refresh() {
         QString target_text = QString::asprintf("%04X @%02X",
                                                 f.target_pc, f.target_page);
         if (symbol_table_) {
-            auto sym = symbol_table_->lookup(f.target_pc);
+            auto sym = symbol_table_->lookup(f.target_page, f.target_pc);
             if (sym)
                 target_text = QString::fromStdString(*sym) +
                               QString::asprintf(" @%02X", f.target_page);

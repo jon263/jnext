@@ -340,7 +340,9 @@ void DisasmPanel::paintEvent(QPaintEvent* /*event*/)
         if (symbol_table_) {
             uint16_t imm = extract_immediate16(entry.line.mnemonic);
             if (imm != 0 || std::strstr(entry.line.mnemonic, "$0000")) {
-                auto sym = symbol_table_->lookup(imm);
+                const uint8_t page =
+                    emulator_->mmu().get_effective_page(imm >> 13);
+                auto sym = symbol_table_->lookup(page, imm);
                 if (sym) {
                     QString target = QString::asprintf("$%04X", imm);
                     mnemonic_str.replace(target, QString::fromStdString(*sym));
@@ -575,27 +577,48 @@ void DisasmPanel::contextMenuEvent(QContextMenuEvent* event)
         menu.addSeparator();
 
         if (symbol_table_) {
-            auto sym = symbol_table_->lookup(addr);
+            const uint8_t page =
+                emulator_->mmu().get_effective_page(addr >> 13);
+            const std::optional<uint8_t> pinned_page =
+                !emulator_->mmu().is_slot_rom(addr >> 13) && page < 0xE0
+                    ? std::optional<uint8_t>(page) : std::nullopt;
+            auto sym = symbol_table_->lookup(page, addr);
             if (sym) {
-                auto* watch_sym = menu.addAction(
-                    QString("Watch '%1' ($%2)").arg(QString::fromStdString(*sym))
-                        .arg(addr, 4, 16, QChar('0')));
-                connect(watch_sym, &QAction::triggered, this, [this, addr, sym]() {
-                    watch_panel_->add_watch(addr, *sym);
+                const QString location = pinned_page
+                    ? QString("$%1 @%2")
+                          .arg(addr, 4, 16, QChar('0'))
+                          .arg(*pinned_page, 2, 16, QChar('0'))
+                    : QString("$%1").arg(addr, 4, 16, QChar('0'));
+                auto* watch_sym = menu.addAction(QString("Watch '%1' (%2)")
+                    .arg(QString::fromStdString(*sym), location));
+                connect(watch_sym, &QAction::triggered,
+                        this, [this, addr, pinned_page, sym]() {
+                    watch_panel_->add_watch(addr, *sym, 0, pinned_page);
                 });
             }
         }
 
         if (has_imm) {
             QString label;
+            const uint8_t page =
+                emulator_->mmu().get_effective_page(imm >> 13);
+            const std::optional<uint8_t> pinned_page =
+                !emulator_->mmu().is_slot_rom(imm >> 13) && page < 0xE0
+                    ? std::optional<uint8_t>(page) : std::nullopt;
             if (symbol_table_) {
-                auto sym = symbol_table_->lookup(imm);
+                auto sym = symbol_table_->lookup(page, imm);
                 if (sym) label = QString::fromStdString(*sym);
             }
-            auto* watch_imm = menu.addAction(
-                QString("Watch $%1").arg(imm, 4, 16, QChar('0')));
-            connect(watch_imm, &QAction::triggered, this, [this, imm, label]() {
-                watch_panel_->add_watch(imm, label.toStdString());
+            const QString location = pinned_page
+                ? QString("$%1 @%2")
+                      .arg(imm, 4, 16, QChar('0'))
+                      .arg(*pinned_page, 2, 16, QChar('0'))
+                : QString("$%1").arg(imm, 4, 16, QChar('0'));
+            auto* watch_imm = menu.addAction(QString("Watch %1").arg(location));
+            connect(watch_imm, &QAction::triggered,
+                    this, [this, imm, pinned_page, label]() {
+                watch_panel_->add_watch(
+                    imm, label.toStdString(), 0, pinned_page);
             });
         }
 

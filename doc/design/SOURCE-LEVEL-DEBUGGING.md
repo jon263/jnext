@@ -24,7 +24,8 @@ enough when different 8K pages can occupy the same logical address.
 ## 3. Non-goals
 
 - Parsing compiler-specific type information or variable layouts.
-- Bank-qualified data watchpoints; these remain logical-address based.
+- Bank-qualified data watchpoints; these remain logical-address based. Display
+  watches may be page-pinned because they read memory without trapping access.
 - Defining the eventual z88dk debugger protocol or BasicStudio transport.
 - Replacing instruction-level disassembly where no source record exists.
 - Background execution of source steps. They run synchronously with a bounded
@@ -70,7 +71,8 @@ Execution breakpoints follow the same rule:
 - a page-qualified breakpoint matches only that physical page and address.
 
 Source-gutter breakpoints are page-qualified. The Breakpoints panel can create
-logical wildcards. Existing numeric and symbol breakpoints remain unqualified.
+logical wildcards or page-qualified execution breakpoints from SLD labels and
+`address@page` expressions.
 
 ### 4.3 Format adapters
 
@@ -78,12 +80,14 @@ The adapters are free functions at the edge of the feature:
 
 - `load_z88dk_map` and `load_simple_map` populate `SymbolTable`;
 - `load_nextbuild_memory` parses NextBuild/Boriel `Memory.txt` output;
-- `load_sld` parses sjasmplus SLD v1 records into `SourceMap`.
+- `load_sld` parses sjasmplus SLD v1 trace records into `SourceMap` and label
+  records into page-qualified `SymbolTable` entries.
 
 The SLD adapter accepts Next 8K-page device records and rejects inconsistent
-device or slot metadata with a line-numbered error. Page-less records remain
-valid wildcards. Identity metadata is carried in SLD comment records so the
-file remains consumable by other SLD tools.
+device or slot metadata with a line-numbered error. A page value of `-1` on a
+trace or label is retained as a logical wildcard; values below `-1` or outside
+the declared page range are invalid. Identity metadata is carried in SLD
+comment records so the file remains consumable by other SLD tools.
 
 A future compiler adapter should emit `SymbolDefinition` and `SourceLocation`
 records. It must not add compiler cases to debugger panels or stepping code.
